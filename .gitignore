@@ -1,0 +1,44 @@
+## Secrets
+.env
+.env.*
+!.env.example
+
+## Python build / package metadata
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+
+## OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+## HuggingFace cache (machine-local)
+.hf_cache/
+
+## Pyserini index build artifacts (regenerable from corpus + scripts)
+/indexes/
+
+## Bulky run outputs that downstream tools regenerate
+/results/intermediate/
+
+## Smoke / pytest run outputs
+/results_smoke/
+/results/smoke_test.log
+/results/*.log
+
+## Fine-tuned dense model checkpoints (host on HF Models instead)
+/results/dense_finetune/
+
+## Optional sidecar data (download from HF Datasets — see docs/data_format.md)
+/data/recare_d2e/
+/data/recare_d2q/
+
+## pytest cache
+.pytest_cache/

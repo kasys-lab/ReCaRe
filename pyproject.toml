@@ -1,0 +1,62 @@
+[project]
+name = "recare-baselines"
+version = "0.1.0"
+description = "Retrieval baselines (BM25, dense, rerankers, RankGPT, expansion, domain adaptation) for the ReCaRe benchmark"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Takumi Ito" },
+    { name = "Yuma Kurokawa" },
+    { name = "Makoto P. Kato", email = "mpkato@slis.tsukuba.ac.jp" },
+    { name = "Sumio Fujita" },
+]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "pyserini>=0.43.0",
+    "datasets>=3.0.0",
+    "huggingface-hub>=0.26.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "tqdm>=4.66.0",
+    "click>=8.1.0",
+    "fugashi>=1.4.0",
+    "unidic-lite>=1.0.8",
+    "ir-measures>=0.4.3",
+    "statsmodels>=0.14.6",
+    "scipy>=1.17.1",
+    "einops>=0.8.2",
+    "sentence-transformers>=5.4.1",
+    "transformers<5.0",
+    "peft>=0.18.0",
+    "openai>=2.33.0",
+    "tiktoken>=0.12.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/kasys-lab/ReCaRe"
+Dataset = "https://huggingface.co/datasets/kasys/ReCaRe"
+
+[project.scripts]
+recare-baselines = "recare_baselines.cli:cli"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/recare_baselines"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
