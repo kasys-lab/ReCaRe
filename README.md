@@ -14,9 +14,13 @@ dense retrievers, cross-encoder rerankers, RankGPT zero-shot listwise
 LLM reranking, query/document expansion, and dense-retriever domain
 adaptation.
 
-The dataset construction pipeline (§3.1), validation pipeline (§3.3),
-and characterization metrics (§4.1) are intentionally outside the scope of
-this public release.
+The dataset construction *pipeline* (the scraping / alignment / validation
+code), and the characterization metrics (§4.1), are intentionally outside
+the scope of this public release. The **construction methodology itself**
+— amendment-rationale extraction, article-level alignment, qrel
+derivation, splits — is documented in
+[`docs/dataset_construction.md`](docs/dataset_construction.md) for
+reproducibility.
 
 ## Contents
 
@@ -25,11 +29,19 @@ ReCaRe/
 ├── src/recare_baselines/   # Python package (CLI: recare-baselines)
 ├── scripts/                # End-to-end run scripts for each paper table
 ├── prompts/                # LLM prompt cards (expansion, RankGPT)
-├── docs/                   # Reproduction guide, experiment details
+├── docs/                   # Dataset construction + reproduction guides
 ├── tests/                  # pytest unit + smoke tests
 ├── results/                # Per-cell metrics + result-summary markdown
 └── data/expansion/         # LLM query expansions (test split, ~7 MB)
 ```
+
+| Document | What it covers |
+|---|---|
+| [`docs/dataset_construction.md`](docs/dataset_construction.md) | How ReCaRe was constructed from EUR-Lex + e-Gov: source selection, rationale extraction, article-level alignment (Dice ≥ 0.7 / Simpson ≥ 0.95), qrel derivation, event-level train/val/test split |
+| [`docs/reproduction.md`](docs/reproduction.md) | Step-by-step paper-table reproduction (Tables 2–4) |
+| [`docs/experiments.md`](docs/experiments.md) | Per-method implementation details and runtime expectations |
+| [`docs/smoke_test.md`](docs/smoke_test.md) | CPU-only lightweight reproducibility check |
+| [`docs/data_format.md`](docs/data_format.md) | On-disk JSONL / metrics / runfile schemas |
 
 ## Quickstart
 
