@@ -60,6 +60,73 @@ def _hf_path(filename: str) -> Path:
     )
 
 
+# ---------------------------------------------------------------------------
+# Document-side expansions (d2e / d2q) — distributed separately on HF because
+# they are full-corpus and too large for this code repo (~305 MB total).
+# Repo: https://huggingface.co/datasets/kasys/ReCaRe-expansions
+# ---------------------------------------------------------------------------
+
+DOC_EXPANSION_REPO = "kasys/ReCaRe-expansions"
+DOC_EXPANSION_METHODS = ("d2e", "d2q")
+DOC_EXPANSION_DIR = REPO_ROOT / "data"
+
+
+def _doc_expansion_relpath(method: str, lang: str) -> str:
+    """Path within the repo / HF dataset for a (method, lang) expansion file."""
+    return f"recare_{method}/recare_{lang}_{method}_documents.jsonl"
+
+
+def doc_expansion_path(method: str, lang: str, *, download: bool = True) -> Path:
+    """Return the local path to a document-side expansion JSONL (``{id, contents}``).
+
+    Looks for the file at the canonical local layout
+    ``data/recare_{method}/recare_{lang}_{method}_documents.jsonl`` (the path the
+    augmentation scripts expect). If it is absent and ``download`` is True,
+    fetch it from the public HF dataset :data:`DOC_EXPANSION_REPO` and copy it
+    into that local layout so the scripts work unchanged after a fresh clone.
+
+    ``method`` is ``"d2e"`` (LLM document explanation) or ``"d2q"`` (Doc2Query).
+    """
+    if method not in DOC_EXPANSION_METHODS:
+        raise ValueError(f"method must be one of {DOC_EXPANSION_METHODS}, got {method!r}")
+    if lang not in LANGS:
+        raise ValueError(f"lang must be one of {LANGS}, got {lang!r}")
+
+    rel = _doc_expansion_relpath(method, lang)
+    local = DOC_EXPANSION_DIR / rel
+    if local.exists():
+        return local
+    if not download:
+        raise FileNotFoundError(
+            f"{local} not found; pass download=True or run "
+            f"`recare-baselines fetch-expansions` to fetch from {DOC_EXPANSION_REPO}"
+        )
+
+    import shutil
+
+    from huggingface_hub import hf_hub_download
+
+    cached = hf_hub_download(
+        repo_id=DOC_EXPANSION_REPO,
+        filename=rel,
+        repo_type="dataset",
+    )
+    local.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(cached, local)
+    return local
+
+
+def fetch_doc_expansions(
+    methods: tuple[str, ...] = DOC_EXPANSION_METHODS,
+    langs: tuple[str, ...] = LANGS,
+) -> list[Path]:
+    """Download all requested document-side expansions into ``data/``.
+
+    Returns the list of local paths. Idempotent: existing files are reused.
+    """
+    return [doc_expansion_path(m, lang) for m in methods for lang in langs]
+
+
 def load(task: str, lang: str, split: str = "test") -> ReCaReData:
     if task not in TASKS:
         raise ValueError(f"task must be one of {TASKS}, got {task!r}")

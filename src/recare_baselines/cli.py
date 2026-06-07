@@ -111,6 +111,40 @@ def cli() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Data fetch
+# ---------------------------------------------------------------------------
+
+
+@cli.command("fetch-expansions")
+@click.option(
+    "--method",
+    type=click.Choice(["d2e", "d2q", "all"]),
+    default="all",
+    show_default=True,
+    help="Which document-side expansion to fetch.",
+)
+@click.option(
+    "--lang",
+    type=click.Choice(["en", "ja", "all"]),
+    default="all",
+    show_default=True,
+)
+def fetch_expansions(method, lang):
+    """Download document-side expansions (d2e/d2q) from HF into ``data/``.
+
+    Pulls from kasys/ReCaRe-expansions and places files at the canonical
+    ``data/recare_{method}/recare_{lang}_{method}_documents.jsonl`` layout the
+    augmentation scripts expect. Idempotent; existing files are reused.
+    """
+    methods = data.DOC_EXPANSION_METHODS if method == "all" else (method,)
+    langs = data.LANGS if lang == "all" else (lang,)
+    paths = data.fetch_doc_expansions(methods=methods, langs=langs)
+    for p in paths:
+        click.echo(f"  {p}  ({p.stat().st_size / 1e6:.1f} MB)")
+    click.echo(f"fetched {len(paths)} file(s) from {data.DOC_EXPANSION_REPO}")
+
+
+# ---------------------------------------------------------------------------
 # BM25
 # ---------------------------------------------------------------------------
 
