@@ -57,9 +57,13 @@ if [[ " $PHASES " == *" 1 "* ]]; then
 fi
 
 # -------------------------------------------------------------- Phase 2 (BM25 doc-aug indexes)
-# Requires data/recare_d2q/ and data/recare_d2e/ to exist (download from HF —
-# see docs/data_format.md).
+# The d2q / d2e full-corpus expansions are fetched automatically from
+# HF (kasys/ReCaRe-expansions) into data/recare_d2{q,e}/ — see docs/data_format.md.
 if [[ " $PHASES " == *" 2 "* ]]; then
+    stamp ">>> fetch-expansions (d2q/d2e from HF)"
+    uv run recare-baselines fetch-expansions >> "$LOG" 2>&1
+    stamp "<<< fetch-expansions (rc=$?)"
+
     declare -a JOBS=(
         "en d2q data/recare_d2q/recare_en_d2q_documents.jsonl"
         "ja d2q data/recare_d2q/recare_ja_d2q_documents.jsonl"
@@ -69,7 +73,7 @@ if [[ " $PHASES " == *" 2 "* ]]; then
     for spec in "${JOBS[@]}"; do
         read -r lang suffix path <<< "$spec"
         if [[ ! -f "$path" ]]; then
-            stamp "skip $lang+$suffix: $path not found (download from HF first)"
+            stamp "skip $lang+$suffix: $path not found (fetch-expansions failed?)"
             continue
         fi
         stamp ">>> bm25 index $lang+$suffix"

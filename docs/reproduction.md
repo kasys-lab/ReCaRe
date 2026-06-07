@@ -85,8 +85,8 @@ for the full grid; high-level:
 # Phase 1: generate query expansions (needs Azure API key)
 PHASES=1 bash scripts/run_expansion.sh
 
-# Phase 2: build augmented indexes (needs d2q / d2e corpus outputs;
-#          see docs/data_format.md to download from HF)
+# Phase 2: build augmented indexes (d2q / d2e corpus expansions are
+#          auto-fetched from HF kasys/ReCaRe-expansions; see docs/data_format.md)
 PHASES=2 bash scripts/run_expansion.sh
 
 # Phase 3: evaluate the 64 augmented cells

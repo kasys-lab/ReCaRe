@@ -146,9 +146,18 @@ is encoded in the prompt-generation step and not stored separately.
 
 The d2q (T5 docTTTTTquery) and d2e (LLM explanation) full-corpus
 expansions are not committed to this repo because of their size
-(~150 MB each per language). They are released as a separate HuggingFace
-dataset at `kasys/ReCaRe-expansions` (placeholder name; check the dataset
-page for the canonical id):
+(~305 MB total). They are released as a separate HuggingFace dataset at
+[`kasys/ReCaRe-expansions`](https://huggingface.co/datasets/kasys/ReCaRe-expansions)
+(public, tag `v0.1.0`). Fetch them with the bundled CLI, which places the
+files at the exact paths the augmentation pipeline expects:
+
+```bash
+uv run recare-baselines fetch-expansions          # all (d2e + d2q, en + ja)
+# or selectively: --method d2e --lang en
+```
+
+(`scripts/run_expansion.sh` Phase 2 calls this automatically.) Equivalently,
+download with the HF CLI:
 
 ```bash
 huggingface-cli download kasys/ReCaRe-expansions \
