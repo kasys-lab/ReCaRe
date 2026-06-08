@@ -76,6 +76,14 @@ GPU required for tractable runtime. jina-v3 needs `trust_remote_code=True`
 (handled automatically). Corpus encoding can take 30-60 min/lang on a
 single A100; longer on consumer cards.
 
+jina-v3's 8192-token attention is `O(seq^2)`, so the script encodes it at
+**batch size 4** by default (bge-m3 uses 16) and sets
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`; at batch 16 jina-v3 OOMs
+on a 40 GB GPU. Override per run with `BATCH_SIZE=N` (applies to all models —
+raise it on a larger GPU, lower it on a smaller one). The script encodes and
+searches each model fully before moving on, so if a later model OOMs the
+earlier model's results are still produced on disk.
+
 ### Augmentation block (Q2E, Q2D, d2e, d2q on BM25 and jina-v3)
 
 Three-phase pipeline. See [`scripts/run_expansion.sh`](../scripts/run_expansion.sh)
@@ -110,6 +118,22 @@ small→large so a later OOM still leaves smaller models' results on disk.
 Qwen3-8B requires ≥40 GB of GPU memory; reduce batch size in the script
 or use `MODELS="bge-reranker-v2-m3 jina-reranker-v2 qwen3-reranker-4b"` to
 skip it.
+
+> **Verifying vs committed results.** `run_rerankers.sh` (and `run_expansion.sh`
+> Phase 3) pass `--skip-existing` by default, so on a fresh clone — which
+> already ships the committed reference metrics — every cell is *skipped*
+> (`metrics cell already complete`, rc=0) and **nothing is recomputed**. That
+> is the intended resume-safe behavior, but it means a green run does not by
+> itself prove reproduction. To actually recompute and compare against the
+> committed values, force it with `SKIP_EXISTING=0`:
+>
+> ```bash
+> SKIP_EXISTING=0 bash scripts/run_rerankers.sh
+> SKIP_EXISTING=0 PHASES=3 bash scripts/run_expansion.sh
+> ```
+>
+> Cells are recomputed and their metrics overwritten in place; diff against
+> `git` to confirm they match.
 
 ### RankGPT (zero-shot listwise LLM)
 

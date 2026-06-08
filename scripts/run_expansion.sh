@@ -39,6 +39,14 @@ QUERY_FAMILIES=(q2d_zs q2e_zs task_q2e)
 QUERY_MODELS=(gpt-4.1-mini qwen3.5-9b)
 JINA_QUERY_BS=${JINA_QUERY_BS:-8}
 
+# Phase 3 default: skip cells whose metrics already exist on disk (resume-safe).
+# A fresh clone ships the committed reference metrics, so the default Phase 3
+# run skips every cell without recomputing. Force recomputation (to verify the
+# committed values) with SKIP_EXISTING=0:  SKIP_EXISTING=0 PHASES=3 bash scripts/run_expansion.sh
+SKIP_EXISTING=${SKIP_EXISTING:-1}
+skip_flag=()
+[ "$SKIP_EXISTING" = "1" ] && skip_flag=(--skip-existing)
+
 # -------------------------------------------------------------- Phase 1
 if [[ " $PHASES " == *" 1 "* ]]; then
     for family in "${QUERY_FAMILIES[@]}"; do
@@ -98,7 +106,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
             for lang in "${LANGS[@]}"; do
                 stamp ">>> bm25+$aug $task/$lang"
                 uv run recare-baselines run-bm25 "$task" "$lang" \
-                    --doc-aug-suffix "$aug" --skip-existing >> "$LOG" 2>&1
+                    --doc-aug-suffix "$aug" "${skip_flag[@]}" >> "$LOG" 2>&1
                 stamp "<<< bm25+$aug $task/$lang (rc=$?)"
             done
         done
@@ -111,7 +119,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                     path="data/expansion/$fam/${model}_${task}_${lang}_test.jsonl"
                     stamp ">>> bm25+$fam.$model $task/$lang"
                     uv run recare-baselines run-bm25 "$task" "$lang" \
-                        --query-augmentation "$path" --skip-existing >> "$LOG" 2>&1
+                        --query-augmentation "$path" "${skip_flag[@]}" >> "$LOG" 2>&1
                     stamp "<<< bm25+$fam.$model $task/$lang (rc=$?)"
                 done
             done
@@ -124,7 +132,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                 stamp ">>> jina-v3+$aug $task/$lang"
                 uv run recare-baselines run-dense jina-v3 "$task" "$lang" \
                     --doc-aug-suffix "$aug" --batch-size "$JINA_QUERY_BS" \
-                    --skip-existing >> "$LOG" 2>&1
+                    "${skip_flag[@]}" >> "$LOG" 2>&1
                 stamp "<<< jina-v3+$aug $task/$lang (rc=$?)"
             done
         done
@@ -138,7 +146,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                     stamp ">>> jina-v3+$fam.$model $task/$lang"
                     uv run recare-baselines run-dense jina-v3 "$task" "$lang" \
                         --query-augmentation "$path" --batch-size "$JINA_QUERY_BS" \
-                        --skip-existing >> "$LOG" 2>&1
+                        "${skip_flag[@]}" >> "$LOG" 2>&1
                     stamp "<<< jina-v3+$fam.$model $task/$lang (rc=$?)"
                 done
             done
