@@ -74,7 +74,9 @@ bash scripts/run_long_dense.sh
 
 GPU required for tractable runtime. jina-v3 needs `trust_remote_code=True`
 (handled automatically). Corpus encoding can take 30-60 min/lang on a
-single A100; longer on consumer cards.
+single A100; longer on consumer cards. jina-v3 encodes at batch size 4 by
+default (its 8192-token attention OOMs at larger batches on a 40 GB GPU);
+set `BATCH_SIZE=N` to override for all models.
 
 ### Augmentation block (Q2E, Q2D, d2e, d2q on BM25 and jina-v3)
 

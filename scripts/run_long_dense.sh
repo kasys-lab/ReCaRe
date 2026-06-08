@@ -5,6 +5,7 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 LOG=results/long_dense_runs.log
 mkdir -p "$(dirname "$LOG")"
@@ -15,23 +16,32 @@ stamp() {
 }
 
 MODELS=${MODELS:-"bge-m3 jina-v3"}
-BATCH_SIZE=${BATCH_SIZE:-16}
 
+# Per-model batch size: jina-v3's 8192-token O(seq^2) attention OOMs at 16 on a
+# 40 GB GPU, so default it to 4. BATCH_SIZE=N overrides all models.
+batch_for() {
+    if [ -n "${BATCH_SIZE:-}" ]; then echo "$BATCH_SIZE"; return; fi
+    case "$1" in
+        jina-v3) echo 4 ;;
+        *)       echo 16 ;;
+    esac
+}
+
+# Encode and search each model before the next, so a later model's OOM does not
+# leave an earlier (already-encoded) model unsearched.
 for model in $MODELS; do
+    bs=$(batch_for "$model")
     for lang in en ja; do
-        stamp ">>> encode $model $lang"
+        stamp ">>> encode $model $lang (batch=$bs)"
         uv run recare-baselines encode-dense "$model" "$lang" \
-            --batch-size "$BATCH_SIZE" >> "$LOG" 2>&1
+            --batch-size "$bs" >> "$LOG" 2>&1
         stamp "<<< encode $model $lang"
     done
-done
-
-for model in $MODELS; do
     for task in rat2rev rev2rev; do
         for lang in en ja; do
-            stamp ">>> search $model $task $lang"
+            stamp ">>> search $model $task $lang (batch=$bs)"
             uv run recare-baselines run-dense "$model" "$task" "$lang" \
-                --batch-size "$BATCH_SIZE" >> "$LOG" 2>&1
+                --batch-size "$bs" >> "$LOG" 2>&1
             stamp "<<< search $model $task $lang"
         done
     done

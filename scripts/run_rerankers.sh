@@ -5,9 +5,8 @@
 # qwen3-reranker-4b, qwen3-reranker-8b. The 0.6b model is included here for
 # completeness (supplementary, not in paper).
 #
-# Resumable via --skip-existing: completed cells in results/metrics/ are
-# detected and skipped. Order is small→large so a later OOM still leaves
-# smaller models' results on disk.
+# Each cell is recomputed and its metrics file overwritten in place. Order is
+# small→large so a later OOM still leaves smaller models' results on disk.
 #
 # Prereq: results/intermediate/bm25_top100/{task}_{lang}.jsonl must exist.
 # Run scripts/run_bm25.sh first.
@@ -32,7 +31,7 @@ for model in $MODELS; do
         for lang in en ja; do
             stamp ">>> $model $task $lang"
             uv run recare-baselines rerank "$model" "$task" "$lang" \
-                --first-stage bm25 --skip-existing >> "$LOG" 2>&1
+                --first-stage bm25 >> "$LOG" 2>&1
             rc=$?
             stamp "<<< $model $task $lang (rc=$rc)"
         done
