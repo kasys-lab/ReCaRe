@@ -98,7 +98,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
             for lang in "${LANGS[@]}"; do
                 stamp ">>> bm25+$aug $task/$lang"
                 uv run recare-baselines run-bm25 "$task" "$lang" \
-                    --doc-aug-suffix "$aug" --skip-existing >> "$LOG" 2>&1
+                    --doc-aug-suffix "$aug" >> "$LOG" 2>&1
                 stamp "<<< bm25+$aug $task/$lang (rc=$?)"
             done
         done
@@ -111,7 +111,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                     path="data/expansion/$fam/${model}_${task}_${lang}_test.jsonl"
                     stamp ">>> bm25+$fam.$model $task/$lang"
                     uv run recare-baselines run-bm25 "$task" "$lang" \
-                        --query-augmentation "$path" --skip-existing >> "$LOG" 2>&1
+                        --query-augmentation "$path" >> "$LOG" 2>&1
                     stamp "<<< bm25+$fam.$model $task/$lang (rc=$?)"
                 done
             done
@@ -124,7 +124,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                 stamp ">>> jina-v3+$aug $task/$lang"
                 uv run recare-baselines run-dense jina-v3 "$task" "$lang" \
                     --doc-aug-suffix "$aug" --batch-size "$JINA_QUERY_BS" \
-                    --skip-existing >> "$LOG" 2>&1
+                    >> "$LOG" 2>&1
                 stamp "<<< jina-v3+$aug $task/$lang (rc=$?)"
             done
         done
@@ -138,7 +138,7 @@ if [[ " $PHASES " == *" 3 "* ]]; then
                     stamp ">>> jina-v3+$fam.$model $task/$lang"
                     uv run recare-baselines run-dense jina-v3 "$task" "$lang" \
                         --query-augmentation "$path" --batch-size "$JINA_QUERY_BS" \
-                        --skip-existing >> "$LOG" 2>&1
+                        >> "$LOG" 2>&1
                     stamp "<<< jina-v3+$fam.$model $task/$lang (rc=$?)"
                 done
             done
