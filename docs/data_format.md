@@ -177,23 +177,33 @@ the augmented BM25 indexes and jina-v3 embeddings.
 
 ## Domain adaptation checkpoints (HF Models)
 
-The 20 fine-tuned adapters are too large to ship in the source tree. They
-will be uploaded to HuggingFace Models under the prefix
-`kasys-lab/recare-<base_model>-<task>-<lang>`. Each adapter ships:
+The 20 fine-tuned checkpoints (5 base models × 2 tasks × 2 languages) are too
+large to ship in the source tree (~15 GB total). They are released as a single
+HuggingFace model repo
+[`kasys/ReCaRe-domain-adaptation`](https://huggingface.co/kasys/ReCaRe-domain-adaptation),
+one subfolder per checkpoint named `<model>_<task>_<lang>`. Each subfolder
+ships:
 
-- LoRA weights (for `bge-m3`, `jina-v3`) or full fine-tuned state dict
-  (for `mdpr`, `mcontriever`, `me5-base`)
-- `train_config.json` (hyperparameters)
-- `train_steps.jsonl` (per-step training loss)
-- `metrics.jsonl` (per-epoch validation metrics)
+- LoRA weights (`adapter_model.safetensors`, for `bge-m3`) or the full
+  fine-tuned model (`model.safetensors`, for `jina-v3`, `mdpr`, `mcontriever`,
+  `me5-base`) plus its tokenizer
+- `checkpoint_meta.json` (training hyperparameters + `output_alias`)
 
-Load via:
+Fetch them with the bundled CLI, which places each checkpoint at the path the
+evaluation expects (`results/dense_finetune/<model>/<task>_<lang>/best`):
+
+```bash
+uv run recare-baselines fetch-finetuned                 # all 20
+# or selectively: --model bge-m3 --task rat2rev --lang en
+```
+
+`scripts/run_domain_adaptation.sh` Phase 3 calls this automatically for any
+cell whose checkpoint is missing locally, so `PHASES=3 bash
+scripts/run_domain_adaptation.sh` reproduces the Table 4 evaluation without
+re-training. Equivalently, download one checkpoint directly:
 
 ```python
 from huggingface_hub import snapshot_download
-
-ckpt = snapshot_download("kasys-lab/recare-bge-m3-rat2rev-en")
-# Then point recare-baselines run-finetuned-dense at $ckpt
+ckpt = snapshot_download("kasys/ReCaRe-domain-adaptation",
+                         allow_patterns="bge-m3_rat2rev_en/*")
 ```
-
-(Refer to the model card for the exact alias once published.)

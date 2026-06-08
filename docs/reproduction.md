@@ -144,9 +144,18 @@ Three phases in one script (toggle via `PHASES`):
 3. Encode the adapted corpus, evaluate on test, and aggregate into
    `results/domain_adaptation.json`.
 
-The 20 trained checkpoints are too large to ship in the repo; they will be
-uploaded to HuggingFace Hub at `kasys-lab/recare-<model>-<task>-<lang>`.
-See [`docs/data_format.md`](data_format.md) for the download command.
+The 20 trained checkpoints (~15 GB) are released on HuggingFace at
+[`kasys/ReCaRe-domain-adaptation`](https://huggingface.co/kasys/ReCaRe-domain-adaptation).
+To reproduce **only the evaluation** (skip the expensive training), run Phase 3
+alone — it auto-fetches each missing checkpoint into
+`results/dense_finetune/<model>/<task>_<lang>/best`:
+
+```bash
+PHASES=3 bash scripts/run_domain_adaptation.sh
+```
+
+Or fetch up front with `uv run recare-baselines fetch-finetuned`. See
+[`docs/data_format.md`](data_format.md) for details.
 
 ## Verifying paper numbers
 

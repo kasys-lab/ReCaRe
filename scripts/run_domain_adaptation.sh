@@ -96,6 +96,16 @@ if [[ " $PHASES " == *" 3 "* ]]; then
             for lang in $LANGS; do
                 ckpt="results/dense_finetune/${model}/${task}_${lang}/best"
                 if [[ ! -d "$ckpt" ]]; then
+                    # No locally-trained checkpoint — fetch the released one from
+                    # HF (kasys/ReCaRe-domain-adaptation) so eval can run without
+                    # re-training. Set FETCH=0 to disable.
+                    if [[ "${FETCH:-1}" == "1" ]]; then
+                        stamp ">>> fetch-finetuned $model $task $lang"
+                        uv run recare-baselines fetch-finetuned \
+                            --model "$model" --task "$task" --lang "$lang" >> "$LOG" 2>&1
+                    fi
+                fi
+                if [[ ! -d "$ckpt" ]]; then
                     stamp "skip $model $task $lang (no checkpoint at $ckpt)"
                     continue
                 fi

@@ -144,6 +144,38 @@ def fetch_expansions(method, lang):
     click.echo(f"fetched {len(paths)} file(s) from {data.DOC_EXPANSION_REPO}")
 
 
+@cli.command("fetch-finetuned")
+@click.option(
+    "--model",
+    type=click.Choice([*finetuned_dense_mod.DA_MODEL_KEYS, "all"]),
+    default="all",
+    show_default=True,
+    help="Which base model's domain-adapted checkpoints to fetch.",
+)
+@click.option("--task", type=click.Choice(["rat2rev", "rev2rev", "all"]), default="all", show_default=True)
+@click.option("--lang", type=click.Choice(["en", "ja", "all"]), default="all", show_default=True)
+def fetch_finetuned(model, task, lang):
+    """Download domain-adapted checkpoints (Table 4) from HF.
+
+    Pulls from kasys/ReCaRe-domain-adaptation and places each checkpoint at
+    ``results/dense_finetune/<model>/<task>_<lang>/best`` — the layout Phase 3
+    of run_domain_adaptation.sh evaluates. Lets you reproduce the evaluation
+    without re-running training. Idempotent; existing checkpoints are reused.
+    """
+    models = finetuned_dense_mod.DA_MODEL_KEYS if model == "all" else (model,)
+    tasks = data.TASKS if task == "all" else (task,)
+    langs = data.LANGS if lang == "all" else (lang,)
+    paths = finetuned_dense_mod.fetch_finetuned_checkpoints(
+        model_keys=models, tasks=tasks, langs=langs
+    )
+    for p in paths:
+        click.echo(f"  {p}")
+    click.echo(
+        f"fetched {len(paths)} checkpoint(s) from "
+        f"{finetuned_dense_mod.DA_MODELS_REPO}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # BM25
 # ---------------------------------------------------------------------------

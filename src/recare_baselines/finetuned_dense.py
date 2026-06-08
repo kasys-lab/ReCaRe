@@ -94,6 +94,65 @@ def default_checkpoint_dir(
     return finetune_root / model_key / f"{task}_{lang}" / checkpoint
 
 
+# ---------------------------------------------------------------------------
+# Pre-trained checkpoints (Table 4) — distributed on HF so Phase 3 evaluation
+# can be reproduced without re-running the (expensive) training phase.
+# Repo: https://huggingface.co/kasys/ReCaRe-domain-adaptation
+# ---------------------------------------------------------------------------
+
+DA_MODELS_REPO = "kasys/ReCaRe-domain-adaptation"
+DA_MODEL_KEYS = ("mdpr", "mcontriever", "me5-base", "bge-m3", "jina-v3")
+
+
+def fetch_finetuned_checkpoint(
+    model_key: str,
+    task: str,
+    lang: str,
+    *,
+    finetune_root: Path = FINETUNE_ROOT,
+) -> Path:
+    """Download one fine-tuned checkpoint from HF into the local layout that
+    Phase-3 evaluation expects (``<finetune_root>/<model>/<task>_<lang>/best``).
+
+    Pulls the ``<model>_<task>_<lang>/`` subfolder of :data:`DA_MODELS_REPO`.
+    Idempotent: a checkpoint dir that already exists (e.g. produced locally by
+    ``train-dense``) is reused untouched.
+    """
+    dest = default_checkpoint_dir(model_key, task, lang, finetune_root=finetune_root)
+    if dest.exists() and any(dest.iterdir()):
+        return dest
+
+    from huggingface_hub import snapshot_download
+
+    sub = f"{model_key}_{task}_{lang}"
+    local = Path(snapshot_download(DA_MODELS_REPO, allow_patterns=f"{sub}/*"))
+    src = local / sub
+    if not src.is_dir():
+        raise FileNotFoundError(f"{sub} not found in {DA_MODELS_REPO}")
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in src.iterdir():
+        if f.is_file():
+            shutil.copy2(f, dest / f.name)
+    return dest
+
+
+def fetch_finetuned_checkpoints(
+    model_keys: tuple[str, ...] = DA_MODEL_KEYS,
+    tasks: tuple[str, ...] = data.TASKS,
+    langs: tuple[str, ...] = data.LANGS,
+) -> list[Path]:
+    """Download all requested fine-tuned checkpoints into ``results/dense_finetune``.
+
+    Returns the list of local checkpoint dirs. Idempotent.
+    """
+    return [
+        fetch_finetuned_checkpoint(m, t, lang)
+        for m in model_keys
+        for t in tasks
+        for lang in langs
+    ]
+
+
 def resolve_checkpoint_dir(
     checkpoint: str | Path,
     *,
