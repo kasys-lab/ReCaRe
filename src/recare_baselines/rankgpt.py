@@ -88,15 +88,23 @@ class TokenLedger:
 # ---------------------------------------------------------------------------
 
 
-def _load_azure_config() -> tuple[str, str | None]:
-    """Return ``(api_key, azure_endpoint or None)`` after loading ``.env``.
+def _load_azure_config() -> tuple[str, str | None, str]:
+    """Return ``(api_key, azure_endpoint or None, api_version)`` after loading ``.env``.
 
-    Also normalises env vars for ``openai>=2.x``: that SDK ignores the legacy
-    module-level ``openai.api_type/api_base`` knobs and only consults the new
-    env vars (``AZURE_OPENAI_ENDPOINT``, ``OPENAI_API_TYPE`` etc.) when a
-    client is auto-instantiated. We populate them here so rank_llm's
-    ``openai.chat.completions.create()`` calls hit the right endpoint.
+    Accepts either ``OPENAI_*`` or ``AZURE_OPENAI_*`` names so the variables the
+    docs/README mention (``AZURE_OPENAI_API_KEY`` / ``_ENDPOINT`` / ``_API_VERSION``)
+    work as written. Also normalises env vars for ``openai>=2.x`` so rank_llm's
+    ``openai.chat.completions.create()`` calls hit the right Azure endpoint.
     """
+    from . import STUB_OPENAI_KEY
+
+    # The package __init__ installs STUB_OPENAI_KEY so non-LLM subcommands import
+    # cleanly. Drop it before loading .env so the real key (from .env, which
+    # load_dotenv won't apply over an already-set var) is actually used — sending
+    # the stub previously caused a 401 that rank_llm retries forever (hang).
+    if os.environ.get("OPENAI_API_KEY") == STUB_OPENAI_KEY:
+        del os.environ["OPENAI_API_KEY"]
+
     try:
         from dotenv import load_dotenv
 
@@ -104,24 +112,35 @@ def _load_azure_config() -> tuple[str, str | None]:
         load_dotenv(repo_root / ".env", override=False)
     except ImportError:
         pass
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+
+    api_key = (
+        os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("AZURE_OPENAI_API_KEY")
+    )
+    if not api_key or api_key == STUB_OPENAI_KEY:
         raise RuntimeError(
-            "OPENAI_API_KEY not set. Put it in $REPO_ROOT/.env (gitignored) "
-            "or export it directly in the shell."
+            "No real OpenAI/Azure key found (OPENAI_API_KEY is unset or still the "
+            "non-LLM stub). Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in "
+            "$REPO_ROOT/.env (gitignored) or export it in the shell."
         )
+    # Normalise so downstream (rank_llm / openai client) reads a valid key.
+    os.environ["OPENAI_API_KEY"] = api_key
+
     endpoint = os.environ.get("OPENAI_ENDPOINT") or os.environ.get(
         "AZURE_OPENAI_ENDPOINT"
     )
+    api_version = (
+        os.environ.get("OPENAI_API_VERSION")
+        or os.environ.get("AZURE_OPENAI_API_VERSION")
+        or "2024-10-21"
+    )
     if endpoint:
         # openai>=2.x reads these on lazy client construction.
-        os.environ.setdefault("AZURE_OPENAI_ENDPOINT", endpoint)
-        os.environ.setdefault("AZURE_OPENAI_API_KEY", api_key)
+        os.environ["AZURE_OPENAI_ENDPOINT"] = endpoint
+        os.environ["AZURE_OPENAI_API_KEY"] = api_key
         os.environ.setdefault("OPENAI_API_TYPE", "azure")
-        os.environ.setdefault(
-            "OPENAI_API_VERSION", os.environ.get("OPENAI_API_VERSION", "2024-10-21")
-        )
-    return api_key, endpoint
+        os.environ["OPENAI_API_VERSION"] = api_version
+    return api_key, endpoint, api_version
 
 
 # ---------------------------------------------------------------------------
@@ -169,14 +188,33 @@ def _stub_vllm_dependent_modules():
         sys.modules[name] = m
 
 
+def _import_rank_llm():
+    """Import rank_llm, with an actionable message when it is not installed.
+
+    rank-llm is not a core dependency: it hard-depends on vLLM (which RankGPT
+    does not use — :func:`_stub_vllm_dependent_modules` stubs it), so installing
+    it normally would pull in heavy GPU packages. Install only the minimal set.
+    """
+    try:
+        from rank_llm.rerank.listwise.rank_gpt import SafeOpenai
+        from rank_llm.rerank.rankllm import PromptMode
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "RankGPT requires rank-llm, which is optional and not installed. "
+            "It hard-depends on vLLM (unused here), so install without deps:\n"
+            "    uv pip install --no-deps rank-llm==0.25.7 dacite ftfy wcwidth msgspec\n"
+            f"(original import error: {e})"
+        ) from e
+    return SafeOpenai, PromptMode
+
+
 def _make_reranker(cfg: RankGPTConfig):
     """Instantiate rank_llm's ``SafeOpenai`` with our Azure / OpenAI config."""
-    api_key, endpoint = _load_azure_config()
+    api_key, endpoint, api_version = _load_azure_config()
     _stub_vllm_dependent_modules()
 
     # Lazy import — rank_llm pulls in vLLM / SGLang adapters at import time.
-    from rank_llm.rerank.listwise.rank_gpt import SafeOpenai
-    from rank_llm.rerank.rankllm import PromptMode
+    SafeOpenai, PromptMode = _import_rank_llm()
 
     kwargs = dict(
         model=cfg.model,
@@ -190,7 +228,7 @@ def _make_reranker(cfg: RankGPTConfig):
         kwargs.update(
             api_type="azure",
             api_base=endpoint,
-            api_version=cfg.azure_api_version,
+            api_version=api_version,
         )
     return SafeOpenai(**kwargs)
 
