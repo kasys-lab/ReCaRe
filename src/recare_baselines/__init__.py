@@ -13,4 +13,8 @@ __version__ = "0.1.0"
 # data loading, metrics aggregation) work on a fresh checkout with no keys
 # configured. Real Azure OpenAI / OpenAI usage (recare-baselines rankgpt,
 # expand-queries) overrides this via .env or explicit env vars.
-os.environ.setdefault("OPENAI_API_KEY", "sk-recare-no-llm-stub")
+#
+# LLM code paths must treat this exact value as "no key" (see
+# rankgpt._load_azure_config) so the stub is never sent to the API.
+STUB_OPENAI_KEY = "sk-recare-no-llm-stub"
+os.environ.setdefault("OPENAI_API_KEY", STUB_OPENAI_KEY)

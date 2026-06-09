@@ -115,6 +115,18 @@ skip it.
 
 ### RankGPT (zero-shot listwise LLM)
 
+RankGPT needs **rank-llm**, which is *optional* and not a core dependency: it
+hard-depends on vLLM (which RankGPT does not use — the vLLM-only modules are
+stubbed at runtime). Install only the minimal set:
+
+```bash
+uv pip install --no-deps rank-llm==0.25.7 dacite ftfy wcwidth msgspec
+```
+
+Set Azure credentials (either the `AZURE_OPENAI_*` or `OPENAI_*` names work) in
+`$REPO_ROOT/.env` or the shell: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`,
+and optionally `AZURE_OPENAI_API_VERSION` (default `2024-10-21`). Then:
+
 ```bash
 bash scripts/run_rankgpt.sh
 ```

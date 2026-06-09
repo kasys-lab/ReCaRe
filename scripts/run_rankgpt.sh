@@ -7,15 +7,27 @@
 #   uv run recare-baselines rankgpt-cost --model <id>
 # for a fresh estimate.
 #
-# Required env vars (typically loaded from .env via python-dotenv):
-#   AZURE_OPENAI_API_KEY
-#   AZURE_OPENAI_ENDPOINT
-#   AZURE_OPENAI_API_VERSION
+# Required env vars (loaded from .env via python-dotenv, or exported). Either
+# the AZURE_OPENAI_* or the OPENAI_* names work:
+#   AZURE_OPENAI_API_KEY      (or OPENAI_API_KEY)
+#   AZURE_OPENAI_ENDPOINT     (or OPENAI_ENDPOINT)
+#   AZURE_OPENAI_API_VERSION  (or OPENAI_API_VERSION; default 2024-10-21)
 #
-# Prereq: scripts/run_bm25.sh has produced bm25 top-100 runs.
+# Prereqs:
+#   - scripts/run_bm25.sh has produced bm25 top-100 runs.
+#   - rank-llm is installed. It is optional (hard-depends on vLLM, which RankGPT
+#     does not use), so install only the minimal set:
+#       uv pip install --no-deps rank-llm==0.25.7 dacite ftfy wcwidth msgspec
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
+
+# Fail fast with guidance if rank-llm is missing, rather than mid-run.
+if ! uv run python -c "import rank_llm" 2>/dev/null; then
+    echo "ERROR: rank-llm is not installed. Install the minimal set:" >&2
+    echo "  uv pip install --no-deps rank-llm==0.25.7 dacite ftfy wcwidth msgspec" >&2
+    exit 1
+fi
 
 LOG=results/rankgpt_runs.log
 mkdir -p "$(dirname "$LOG")"
