@@ -18,7 +18,12 @@
   Rat2Rev EU). 5 models × 4 cells = 20 fine-tuned adapters.
 - **Significance**: paired two-sided t-test on per-query metrics
   (Recall@100, nDCG@10) vs the base model, Holm-corrected within each
-  (task, lang, metric) family of `k=5` models.
+  (task, lang, metric) family of `k=5` models. Computed by
+  `recare_baselines.stats.domain_adaptation_holm` and stored per record in
+  [`results/domain_adaptation.json`](domain_adaptation.json) under
+  `significance` (`p_raw`, `p_adj_holm`, `reject`, `t_stat`, `meandiff`,
+  `n_queries`). The `†` above marks a significant **improvement**:
+  `reject` (Holm p_adj < 0.05) **and** `meandiff > 0`.
 
 ## Table 4 (paper) — Recall@100 / nDCG@10, Base → Adapted
 
