@@ -304,6 +304,18 @@ def aggregate_domain_adaptation(
                 }
             )
 
+    # Table 4 significance: per-query paired t-test of each adapted model vs its
+    # own base model, Holm-corrected within each (eval_task, eval_lang, metric)
+    # family. Attaches a "significance" block (R@100 / nDCG@10) to each record so
+    # domain_adaptation.json carries the "†" markers, not just before/after.
+    from . import stats as stats_mod
+
+    significance = stats_mod.domain_adaptation_holm(records, metrics_dir=metrics_dir)
+    for r in records:
+        sig = significance.get(r["alias"])
+        if sig:
+            r["significance"] = sig
+
     records.sort(key=lambda r: (r["base_model"], r["train_task"], r["train_lang"], r["alias"]))
     payload = {"records": records}
 

@@ -37,6 +37,9 @@ TEST_DIR = REPO_ROOT / "results" / "ttest_holm"
 DEFAULT_BASELINE = "bm25"
 _METRIC_KEYS = ("R@10", "R@100", "R@1000", "nDCG@10", "nDCG@100", "nDCG@1000", "AP")
 
+# Metrics on which Table 4 reports adapted-vs-base significance.
+DA_METRIC_KEYS = ("R@100", "nDCG@10")
+
 
 def _load_cell_files() -> dict[tuple[str, str], list[Path]]:
     cells: dict[tuple[str, str], list[Path]] = defaultdict(list)
@@ -157,3 +160,92 @@ def write_results(
     out_path = TEST_DIR / "ttest_holm_all.csv"
     table.to_csv(out_path, index=False)
     return out_path
+
+
+# ---------------------------------------------------------------------------
+# Domain adaptation (Table 4): adapted model vs its own base model
+# ---------------------------------------------------------------------------
+
+
+def _per_query_map(metrics_dir: Path, model: str, task: str, lang: str) -> dict | None:
+    """Return the ``{qid: {metric: value}}`` per-query map for one metrics cell."""
+    f = metrics_dir / f"{model}_{task}_{lang}.json"
+    if not f.exists():
+        return None
+    cell = json.loads(f.read_text())
+    return cell.get("per_query")
+
+
+def domain_adaptation_holm(
+    records: Iterable[dict],
+    *,
+    metrics_dir: Path = METRICS_DIR,
+    metric_keys: Iterable[str] = DA_METRIC_KEYS,
+    alpha: float = 0.05,
+) -> dict[str, dict[str, dict]]:
+    """Per-query paired two-sided t-test of each adapted model vs **its own base
+    model**, Holm-corrected within each ``(eval_task, eval_lang, metric)`` family.
+
+    Unlike :func:`paired_ttest_vs_baseline` (which fixes the baseline to BM25 and
+    pools every method in a cell), this compares ``alias`` to ``base_model`` only
+    and forms one Holm family per (task, lang, metric) over the ``k`` adapted
+    models — the test reported for Table 4's ``†``.
+
+    ``records`` are domain-adaptation records, each with ``alias``,
+    ``base_model``, ``eval_task``, ``eval_lang`` (see
+    :func:`recare_baselines.domain_adaptation.aggregate_domain_adaptation`).
+
+    Returns ``{alias: {metric_key: {n_queries, meandiff, t_stat, p_raw,
+    p_adj_holm, reject}}}``.
+    """
+    raw: dict[tuple[str, str], dict] = {}
+    groups: dict[tuple[str, str, str], list[tuple[str, str]]] = defaultdict(list)
+
+    for r in records:
+        alias = r.get("alias")
+        base = r.get("base_model")
+        task = r.get("eval_task")
+        lang = r.get("eval_lang")
+        if not (alias and base and task and lang):
+            continue
+        adapted_pq = _per_query_map(metrics_dir, alias, task, lang)
+        base_pq = _per_query_map(metrics_dir, base, task, lang)
+        if not adapted_pq or not base_pq:
+            continue
+        for mk in metric_keys:
+            qids = [
+                q
+                for q in adapted_pq
+                if q in base_pq and mk in adapted_pq[q] and mk in base_pq[q]
+            ]
+            if len(qids) < 2:
+                continue
+            after = [float(adapted_pq[q][mk]) for q in qids]
+            before = [float(base_pq[q][mk]) for q in qids]
+            diff = [a - b for a, b in zip(after, before)]
+            if len(set(diff)) <= 1:
+                # No variance in the paired differences → t undefined; treat as
+                # non-significant (matches paired_ttest_vs_baseline).
+                t_stat, p_val = 0.0, 1.0
+            else:
+                t_stat, p_val = scipy_stats.ttest_rel(after, before)
+                t_stat, p_val = float(t_stat), float(p_val)
+            key = (alias, mk)
+            raw[key] = {
+                "n_queries": int(len(qids)),
+                "meandiff": float(sum(diff) / len(diff)),
+                "t_stat": t_stat,
+                "p_raw": float(p_val),
+            }
+            groups[(task, lang, mk)].append(key)
+
+    out: dict[str, dict[str, dict]] = defaultdict(dict)
+    for _family, members in groups.items():
+        pvals = [raw[k]["p_raw"] for k in members]
+        reject, p_adj, _, _ = multipletests(pvals, alpha=alpha, method="holm")
+        for k, rej, padj in zip(members, reject, p_adj):
+            info = dict(raw[k])
+            info["p_adj_holm"] = float(padj)
+            info["reject"] = bool(rej)
+            out[k[0]][k[1]] = info
+    return dict(out)
