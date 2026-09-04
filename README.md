@@ -4,6 +4,8 @@ Retrieval baselines and full experimental code for the paper
 
 > **ReCaRe: A Bilingual Legal Benchmark for Revision Candidate Retrieval.**
 > Takumi Ito, Yuma Kurokawa, Makoto P. Kato, Sumio Fujita.
+> *In Proceedings of the 35th ACM International Conference on Information
+> and Knowledge Management (CIKM '26), 2026. To appear.*
 
 The benchmark dataset itself is released at
 [`kasys/ReCaRe`](https://huggingface.co/datasets/kasys/ReCaRe)
@@ -151,13 +153,16 @@ requires no API keys.
 ## Citation
 
 ```bibtex
-@misc{ito2026recare,
-  title  = {ReCaRe: A Bilingual Legal Benchmark for Revision Candidate
-            Retrieval},
-  author = {Ito, Takumi and Kurokawa, Yuma and Kato, Makoto P. and
-            Fujita, Sumio},
-  year   = {2026},
-  note   = {Manuscript under review}
+@inproceedings{ito2026recare,
+  title     = {ReCaRe: A Bilingual Legal Benchmark for Revision Candidate
+               Retrieval},
+  author    = {Ito, Takumi and Kurokawa, Yuma and Kato, Makoto P. and
+               Fujita, Sumio},
+  booktitle = {Proceedings of the 35th ACM International Conference on
+               Information and Knowledge Management (CIKM '26)},
+  year      = {2026},
+  publisher = {ACM},
+  note      = {To appear}
 }
 ```
 
