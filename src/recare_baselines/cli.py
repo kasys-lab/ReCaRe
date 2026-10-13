@@ -47,6 +47,7 @@ from . import (
     finetuned_dense as finetuned_dense_mod,
     hard_negative as hard_negative_mod,
     rankgpt as rankgpt_mod,
+    ranked_eval as ranked_eval_mod,
     reranker as rerank_mod,
     train_dense as train_dense_mod,
 )
@@ -1248,6 +1249,94 @@ def aggregate_domain_adaptation_cmd(out_json, models):
         models=keep,
     )
     click.echo(f"wrote {result.json_path} | records={result.n_records}")
+
+
+@cli.command("evaluate-ranked")
+@click.argument("run_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("qrels_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--task",
+    type=click.Choice(data.TASKS),
+    default=None,
+    help="Task of the run. 'rev2rev' turns on --filter-self-match unless overridden.",
+)
+@click.option(
+    "--filter-self-match/--no-filter-self-match",
+    default=None,
+    help="Drop docid == qid rows before scoring (the paper does this for Rev2Rev). "
+    "Default: on iff --task rev2rev.",
+)
+@click.option(
+    "--missing",
+    type=click.Choice(ranked_eval_mod.MISSING_POLICIES),
+    default="zero",
+    show_default=True,
+    help="Qrels queries absent from the run: 'zero' scores them 0 (trec_eval -c); "
+    "'skip' averages over the run's queries only.",
+)
+@click.option("--model", default=None, help="Model name recorded in the output JSON.")
+@click.option("--lang", type=click.Choice(data.LANGS), default=None, help="Recorded in output.")
+@click.option("--split", default=None, help="Recorded in output (e.g. test).")
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write a results/metrics-style JSON (with per_query) to this path.",
+)
+def evaluate_ranked_cmd(
+    run_path, qrels_path, task, filter_self_match, missing, model, lang, split, output_path
+):
+    """Evaluate a ranked-list JSONL against a qrels file.
+
+    RUN_PATH has one ``{"qid": "q123", "ranked": ["d456", "d789", ...]}`` per
+    line (best first). QRELS_PATH is a ReCaRe/BEIR qrels JSONL
+    (``query-id``/``corpus-id``/``score``) or a TREC qrels file.
+
+    Reports Recall@{10,100,1000}, nDCG@{10,100,1000} and MAP with the same
+    code as the paper baselines (``results/metrics/``).
+    """
+    if filter_self_match is None:
+        filter_self_match = task == "rev2rev"
+
+    result = ranked_eval_mod.evaluate_ranked_files(
+        run_path, qrels_path, filter_self=filter_self_match, missing=missing
+    )
+
+    if not filter_self_match:
+        ranked, _ = ranked_eval_mod.read_ranked(run_path)
+        n_self = sum(1 for q, docs in ranked.items() if q in docs)
+        if n_self:
+            click.echo(
+                f"warning: {n_self} quer(y/ies) rank their own qid; for Rev2Rev pass "
+                "--filter-self-match (or --task rev2rev) to match the paper protocol.",
+                err=True,
+            )
+
+    cell = {
+        "model": model,
+        "task": task,
+        "lang": lang,
+        "split": split,
+        "run": str(run_path),
+        "qrels": str(qrels_path),
+        "n_queries": result.n_queries,
+        "n_qrels_queries": result.n_qrels_queries,
+        "n_run_queries": result.n_run_queries,
+        "n_missing_queries": len(result.missing_qids),
+        "n_extra_queries": len(result.extra_qids),
+        "missing_policy": missing,
+        "self_match_filtered": filter_self_match,
+        "n_self_matches_dropped": result.n_self_matches_dropped,
+        "n_duplicate_docs_dropped": result.n_duplicate_docs_dropped,
+        "metrics": result.metrics,
+        "per_query": result.per_query,
+    }
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(cell, indent=2))
+        click.echo(f"wrote {output_path}", err=True)
+    click.echo(json.dumps({k: v for k, v in cell.items() if k != "per_query"}, indent=2))
 
 
 @cli.command("ttest-holm")

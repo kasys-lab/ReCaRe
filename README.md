@@ -43,7 +43,7 @@ ReCaRe/
 | [`docs/reproduction.md`](docs/reproduction.md) | Step-by-step paper-table reproduction (Tables 2–4) |
 | [`docs/experiments.md`](docs/experiments.md) | Per-method implementation details and runtime expectations |
 | [`docs/smoke_test.md`](docs/smoke_test.md) | CPU-only lightweight reproducibility check |
-| [`docs/data_format.md`](docs/data_format.md) | On-disk JSONL / metrics / runfile schemas |
+| [`docs/data_format.md`](docs/data_format.md) | On-disk JSONL / metrics / runfile schemas; evaluating external ranked-list runs (`evaluate-ranked`) |
 
 ## Quickstart
 
@@ -64,6 +64,18 @@ bash scripts/run_bm25.sh
 
 The HuggingFace dataset is fetched on demand; no manual download is
 needed. See [`docs/smoke_test.md`](docs/smoke_test.md) for details.
+
+## Evaluating your own run
+
+Write one `{"qid": "q123", "ranked": ["d456", "d789", ...]}` line per query
+and score it against a qrels file with the paper's metric code:
+
+```bash
+uv run recare-baselines evaluate-ranked run.jsonl qrels-rev2rev-en/test.jsonl --task rev2rev
+```
+
+See [`docs/data_format.md`](docs/data_format.md#ranked-list-jsonl-external-runs)
+for options (self-match filter, missing queries, ties).
 
 ## Reproduction
 
