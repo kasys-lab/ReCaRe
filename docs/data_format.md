@@ -29,13 +29,51 @@ Split sizes (test):
 `results/intermediate/<source>_top100/<task>_<lang>.jsonl` use a one-line-per-query JSONL:
 
 ```json
-{"qid": "q123", "ranked": [["d456", 12.345], ["d789", 11.222], ...]}
+{"qid": "q123", "results": [["d456", 12.345], ["d789", 11.222], ...]}
 ```
 
-`ranked` is sorted by score descending. Doc IDs are strings; scores are
+`results` is sorted by score descending. Doc IDs are strings; scores are
 floats. The `runfile` module ([`src/recare_baselines/runfile.py`](../src/recare_baselines/runfile.py))
 provides `read_run(path) → dict[str, list[tuple[str, float]]]` and
 `write_run(run, path)`.
+
+## Ranked-list JSONL (external runs)
+
+To score a system produced outside this repository, write one line per query
+with the ranked document IDs only (best first, no scores):
+
+```json
+{"qid": "q123", "ranked": ["d456", "d789", "d012"]}
+```
+
+and evaluate it against any qrels file (ReCaRe/BEIR JSONL as on HF, or TREC
+format):
+
+```bash
+uv run recare-baselines evaluate-ranked run.jsonl \
+    ~/.cache/huggingface/hub/datasets--kasys--ReCaRe/snapshots/<rev>/qrels-rev2rev-en/test.jsonl \
+    --task rev2rev --model my-system --lang en --split test \
+    --output results/metrics/my-system_rev2rev_en.json
+```
+
+- Metrics and per-query values are computed with the same code as the paper
+  baselines, and `--output` writes the per-cell metrics JSON schema below, so
+  the result can be fed to `ttest-holm`.
+- `--task rev2rev` turns on the `qid == docid` self-match filter used in the
+  paper (override with `--[no-]filter-self-match`). Without it, a warning is
+  printed if any query ranks its own ID.
+- Queries in the qrels but missing from the run score 0 (`--missing zero`,
+  default; `trec_eval -c`). `--missing skip` averages over the run's queries
+  only. Run queries absent from the qrels are ignored.
+- List order is the evaluated order. Each list is de-duplicated (first
+  occurrence wins), then truncated to `--max-docs` documents (default 1,000,
+  the track limit), and then the self-match filter is applied.
+- `.jsonl.gz` input is read transparently. BM25 sample runs for the English
+  subtasks are in `data/sample_runs/` (see [`EVALUATION.md`](../EVALUATION.md)).
+- **Ties:** `trec_eval` orders documents with equal scores by docid
+  (descending), not by input order. When converting a *scored* run with ties
+  into this format, sort by `(score, docid)` descending to reproduce the
+  scored run's numbers exactly.
 
 ## Per-cell metrics JSON
 
