@@ -1274,6 +1274,13 @@ def aggregate_domain_adaptation_cmd(out_json, models):
     help="Qrels queries absent from the run: 'zero' scores them 0 (trec_eval -c); "
     "'skip' averages over the run's queries only.",
 )
+@click.option(
+    "--max-docs",
+    type=click.IntRange(min=0),
+    default=ranked_eval_mod.DEFAULT_MAX_DOCS,
+    show_default=True,
+    help="Keep only the first N documents per query (after de-duplication). 0 = no limit.",
+)
 @click.option("--model", default=None, help="Model name recorded in the output JSON.")
 @click.option("--lang", type=click.Choice(data.LANGS), default=None, help="Recorded in output.")
 @click.option("--split", default=None, help="Recorded in output (e.g. test).")
@@ -1285,12 +1292,21 @@ def aggregate_domain_adaptation_cmd(out_json, models):
     help="Write a results/metrics-style JSON (with per_query) to this path.",
 )
 def evaluate_ranked_cmd(
-    run_path, qrels_path, task, filter_self_match, missing, model, lang, split, output_path
+    run_path,
+    qrels_path,
+    task,
+    filter_self_match,
+    missing,
+    max_docs,
+    model,
+    lang,
+    split,
+    output_path,
 ):
     """Evaluate a ranked-list JSONL against a qrels file.
 
     RUN_PATH has one ``{"qid": "q123", "ranked": ["d456", "d789", ...]}`` per
-    line (best first). QRELS_PATH is a ReCaRe/BEIR qrels JSONL
+    line (best first); ``.gz`` files are read transparently. QRELS_PATH is a ReCaRe/BEIR qrels JSONL
     (``query-id``/``corpus-id``/``score``) or a TREC qrels file.
 
     Reports Recall@{10,100,1000}, nDCG@{10,100,1000} and MAP with the same
@@ -1299,12 +1315,16 @@ def evaluate_ranked_cmd(
     if filter_self_match is None:
         filter_self_match = task == "rev2rev"
 
-    result = ranked_eval_mod.evaluate_ranked_files(
-        run_path, qrels_path, filter_self=filter_self_match, missing=missing
+    ranked = ranked_eval_mod.read_ranked(run_path)
+    result = ranked_eval_mod.evaluate_ranked(
+        ranked,
+        ranked_eval_mod.read_qrels(qrels_path),
+        filter_self=filter_self_match,
+        missing=missing,
+        max_docs=max_docs or None,
     )
 
     if not filter_self_match:
-        ranked, _ = ranked_eval_mod.read_ranked(run_path)
         n_self = sum(1 for q, docs in ranked.items() if q in docs)
         if n_self:
             click.echo(
@@ -1326,6 +1346,8 @@ def evaluate_ranked_cmd(
         "n_missing_queries": len(result.missing_qids),
         "n_extra_queries": len(result.extra_qids),
         "missing_policy": missing,
+        "max_docs": max_docs or None,
+        "n_truncated_queries": result.n_truncated_queries,
         "self_match_filtered": filter_self_match,
         "n_self_matches_dropped": result.n_self_matches_dropped,
         "n_duplicate_docs_dropped": result.n_duplicate_docs_dropped,

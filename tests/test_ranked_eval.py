@@ -66,11 +66,43 @@ def test_empty_list_after_filter_counts_as_missing():
     assert res.metrics["map"] == 0.5
 
 
-def test_read_ranked_dedup_and_errors(tmp_path):
-    p = _write_jsonl(tmp_path / "run.jsonl", [{"qid": "q", "ranked": ["a", "b", "a"]}])
-    run, n_dup = re_mod.read_ranked(p)
-    assert run == {"q": ["a", "b"]} and n_dup == 1
+def test_duplicates_keep_first_occurrence():
+    qrels = {"q": {"b": 1}}
+    res = re_mod.evaluate_ranked({"q": ["a", "a", "b", "a"]}, qrels)
+    assert res.n_duplicate_docs_dropped == 2
+    assert res.metrics["map"] == 0.5  # b at rank 2, not 3
 
+
+def test_truncation_to_max_docs():
+    qrels = {"q": {"p": 1}}
+    ranked = {"q": [f"n{i}" for i in range(1000)] + ["p"]}  # p at rank 1001
+    res = re_mod.evaluate_ranked(ranked, qrels)
+    assert res.n_truncated_queries == 1
+    assert res.metrics["map"] == 0.0 and res.metrics["recall_1000"] == 0.0
+    unlimited = re_mod.evaluate_ranked(ranked, qrels, max_docs=None)
+    assert unlimited.n_truncated_queries == 0 and unlimited.metrics["map"] > 0.0
+
+
+def test_truncation_counts_unique_docs_and_precedes_self_filter():
+    qrels = {"q": {"p": 1}}
+    # 2 duplicates do not use up the budget; p is the 3rd unique doc.
+    res = re_mod.evaluate_ranked({"q": ["a", "a", "b", "b", "p"]}, qrels, max_docs=3)
+    assert res.n_truncated_queries == 0 and res.metrics["recall_10"] == 1.0
+    # Self match occupies a slot before filtering (paper: top-1000 then filter).
+    res = re_mod.evaluate_ranked({"q": ["q", "a", "p"]}, qrels, max_docs=2, filter_self=True)
+    assert res.n_truncated_queries == 1 and res.metrics["recall_10"] == 0.0
+
+
+def test_read_ranked_gzip(tmp_path):
+    import gzip
+
+    p = tmp_path / "run.jsonl.gz"
+    with gzip.open(p, "wt", encoding="utf-8") as f:
+        f.write(json.dumps({"qid": "q", "ranked": ["a", "b"]}) + "\n")
+    assert re_mod.read_ranked(p) == {"q": ["a", "b"]}
+
+
+def test_read_ranked_errors(tmp_path):
     p = _write_jsonl(tmp_path / "dup.jsonl", [{"qid": "q", "ranked": []}] * 2)
     with pytest.raises(ValueError, match="duplicate qid"):
         re_mod.read_ranked(p)

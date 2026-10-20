@@ -32,6 +32,17 @@ uv run recare-baselines evaluate-ranked \
 The command prints a JSON summary. The number that determines the official
 ranking is `metrics.ndcg_10`.
 
+To try the script before you have a run of your own, score one of the
+[sample runs](#sample-runs) instead:
+
+```bash
+uv run recare-baselines evaluate-ranked \
+    data/sample_runs/bm25_rat2rev-en_run1.jsonl.gz \
+    recare_data/qrels-rat2rev-en/test.jsonl \
+    --task rat2rev
+# -> "ndcg_10": 0.1163..., "recall_100": 0.2255...
+```
+
 > `uv sync` installs the full baseline stack (Pyserini, PyTorch, and so on),
 > not only the evaluation code, so the first install can take a while.
 
@@ -55,13 +66,37 @@ not used.
 Track rules for the file:
 
 - Every query in the subtask's test split must appear **exactly once**.
-- Submit **at most 1,000 documents per query**.
+- Submit **at most 1,000 documents per query**. If a list is longer, the
+  script scores only its first 1,000 documents.
 - Name the file `<team_id>_<subtask_id>_<run_id>.jsonl`, for example
   `tsukuba_rat2rev-en_run1.jsonl`. `run1` is your primary run.
 
 If you produced a scored ranking, sort it by score in descending order before
 you write the `ranked` list. The script evaluates documents **in the order
 they appear in the list**.
+
+Submit plain `.jsonl` files. The script also reads gzip-compressed files
+(`.jsonl.gz`), which is how the sample runs are stored.
+
+### Sample runs
+
+`data/sample_runs/` contains BM25 runs for the two English subtasks in the
+official format. They show what a valid submission looks like.
+
+| File | Queries | Documents per query | nDCG@10 | Recall@100 |
+|---|---|---|---|---|
+| `bm25_rat2rev-en_run1.jsonl.gz` | 113 | 1,000 | 0.1163 | 0.2256 |
+| `bm25_rev2rev-en_run1.jsonl.gz` | 503 | 1,000 | 0.2013 | 0.3106 |
+
+They are the BM25 (Pyserini) top-1,000 lists behind the baseline numbers in
+[`results/metrics/`](results/metrics/), and scoring them reproduces those
+numbers exactly. Documents with equal BM25 scores are listed in descending
+docid order, which is how `trec_eval` orders ties. To see a file in submission
+form, decompress it with `gunzip -k`.
+
+In the Rev2Rev sample, every query ranks its own article first, as BM25
+naturally does. With `--task rev2rev`, the script removes that entry and scores
+the remaining 999 documents (`n_self_matches_dropped` = 503).
 
 ---
 
@@ -140,6 +175,8 @@ Before you submit, check these fields:
   the wrong query set or language.
 - `n_duplicate_docs_dropped` should be `0`. When a document appears more than
   once in a list, only its first occurrence counts.
+- `n_truncated_queries` should be `0`. A nonzero value means that some lists
+  had more than 1,000 documents and were cut.
 
 To save per-query scores, for example for your own significance tests, add
 `--output my_scores.json`. The file has the same layout as the files in
@@ -158,6 +195,11 @@ To save per-query scores, for example for your own significance tests, add
   occur.
 - nDCG uses `trec_eval`'s linear gain with a log2 discount. ReCaRe qrels are
   binary (`score` = 1), so the gain choice does not change any result.
+- Each list is processed in this order: (1) duplicate documents are removed,
+  keeping the first occurrence; (2) the list is cut to its first 1,000
+  documents; (3) for Rev2Rev, the query's own ID is removed. Because step 3
+  comes after step 2, a list that contains the query article is scored on 999
+  documents. The ReCaRe paper baselines are scored the same way.
 - A query that is in the qrels but not in your run, or whose list is empty,
   scores 0. A query that is in your run but not in the qrels is ignored.
 
@@ -169,6 +211,7 @@ To save per-query scores, for example for your own significance tests, add
 |---|---|---|
 | `--task {rat2rev,rev2rev}` | none | Records the task. `rev2rev` also turns on the self-match filter. |
 | `--filter-self-match` / `--no-filter-self-match` | on only with `--task rev2rev` | Overrides the self-match filter. |
+| `--max-docs N` | `1000` | Scores only the first N documents of each list, counted after duplicates are removed. `0` means no limit. |
 | `--missing {zero,skip}` | `zero` | `zero` scores missing queries 0, as the official scoring does. `skip` averages over the queries in your run only, which is useful while you debug a partial run. |
 | `--output PATH` | none | Writes the full result, including per-query scores, to a JSON file. |
 | `--model`, `--lang`, `--split` | none | Labels copied into the output. They do not affect scoring. |

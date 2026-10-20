@@ -21,6 +21,16 @@ Note that for a *scored* run, ``trec_eval`` breaks score ties by docid
 (descending), not by input order. To reproduce a scored run's numbers from a
 ranked list, the list must therefore be in ``(score, docid)`` descending order.
 
+Per-query list processing
+-------------------------
+Applied in this order, matching the CAIL 2026 ReCaRe track rules and the paper:
+
+1. A document repeated within one list is kept at its first position only.
+2. The list is truncated to the first ``max_docs`` (default 1,000) documents.
+3. With ``filter_self``, ``docid == qid`` is removed (Rev2Rev). Because this
+   happens after truncation, a run that ranks the query article at rank 1 is
+   scored on its remaining 999 documents, exactly like the paper baselines.
+
 Query coverage
 --------------
 * Queries in the qrels but absent from the run are counted as 0 for every
@@ -33,6 +43,7 @@ Query coverage
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 from dataclasses import dataclass, field
@@ -45,6 +56,7 @@ log = logging.getLogger(__name__)
 RankedRun = dict[str, list[str]]
 
 MISSING_POLICIES = ("zero", "skip")
+DEFAULT_MAX_DOCS = 1000  # CAIL 2026 ReCaRe track: at most 1,000 documents per query
 
 
 @dataclass
@@ -57,6 +69,7 @@ class RankedEvalResult:
     missing_qids: list[str] = field(default_factory=list)  # in qrels, not in run
     extra_qids: list[str] = field(default_factory=list)  # in run, not in qrels
     n_duplicate_docs_dropped: int = 0
+    n_truncated_queries: int = 0  # queries whose list exceeded max_docs
     n_self_matches_dropped: int = 0
 
 
@@ -76,18 +89,23 @@ def _docid(item, *, path: Path, lineno: int) -> str:
     )
 
 
-def read_ranked(path: Path) -> tuple[RankedRun, int]:
-    """Read ``{"qid", "ranked"}`` JSONL.
+def _open_text(path: Path):
+    """Open a text file, transparently decompressing ``*.gz``."""
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt", encoding="utf-8")
+    return open(path, encoding="utf-8")
 
-    Returns ``(run, n_duplicates_dropped)``. A document repeated within one
-    query's list is kept at its first (highest) position only; ``trec_eval``
-    would otherwise count it more than once. A repeated ``qid`` line is an
-    error, since there is no sound way to merge two rankings.
+
+def read_ranked(path: Path) -> RankedRun:
+    """Read ``{"qid", "ranked"}`` JSONL (optionally ``.gz``) as given.
+
+    Lists are returned unmodified; de-duplication and truncation happen in
+    :func:`evaluate_ranked`. A repeated ``qid`` line is an error, since there
+    is no sound way to merge two rankings.
     """
     path = Path(path)
     run: RankedRun = {}
-    n_dup = 0
-    with open(path, encoding="utf-8") as f:
+    with _open_text(path) as f:
         for lineno, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -103,19 +121,8 @@ def read_ranked(path: Path) -> tuple[RankedRun, int]:
                 raise ValueError(f"{path}:{lineno}: duplicate qid {qid!r}")
             if not isinstance(rec["ranked"], list):
                 raise ValueError(f"{path}:{lineno}: 'ranked' must be a list")
-            seen: set[str] = set()
-            ranked: list[str] = []
-            for item in rec["ranked"]:
-                did = _docid(item, path=path, lineno=lineno)
-                if did in seen:
-                    n_dup += 1
-                    continue
-                seen.add(did)
-                ranked.append(did)
-            run[qid] = ranked
-    if n_dup:
-        log.warning("dropped %d duplicate document(s) within ranked lists", n_dup)
-    return run, n_dup
+            run[qid] = [_docid(item, path=path, lineno=lineno) for item in rec["ranked"]]
+    return run
 
 
 def read_qrels(path: Path) -> Qrels:
@@ -127,7 +134,7 @@ def read_qrels(path: Path) -> Qrels:
     """
     path = Path(path)
     qrels: Qrels = {}
-    with open(path, encoding="utf-8") as f:
+    with _open_text(path) as f:
         for lineno, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -166,22 +173,55 @@ def to_scored_run(ranked: RankedRun) -> Run:
     }
 
 
+def prepare_lists(ranked: RankedRun, max_docs: int | None) -> tuple[RankedRun, int, int]:
+    """De-duplicate (first occurrence wins), then truncate to ``max_docs``.
+
+    Returns ``(lists, n_duplicates_dropped, n_truncated_queries)``.
+    """
+    out: RankedRun = {}
+    n_dup = n_trunc = 0
+    for qid, docs in ranked.items():
+        seen: set[str] = set()
+        uniq = []
+        for did in docs:
+            if did in seen:
+                n_dup += 1
+                continue
+            seen.add(did)
+            uniq.append(did)
+        if max_docs is not None and len(uniq) > max_docs:
+            n_trunc += 1
+            uniq = uniq[:max_docs]
+        out[qid] = uniq
+    if n_dup:
+        log.warning("dropped %d duplicate document(s) within ranked lists", n_dup)
+    if n_trunc:
+        log.warning("truncated %d ranked list(s) to %d documents", n_trunc, max_docs)
+    return out, n_dup, n_trunc
+
+
 def evaluate_ranked(
     ranked: RankedRun,
     qrels: Qrels,
     *,
     filter_self: bool = False,
     missing: str = "zero",
+    max_docs: int | None = DEFAULT_MAX_DOCS,
 ) -> RankedEvalResult:
     """Score a ranked-list run with the paper metric set.
 
-    ``filter_self`` drops ``docid == qid`` rows first (required for Rev2Rev to
-    match the paper; see :func:`recare_baselines.eval.filter_self_match`).
+    Each list is de-duplicated and truncated to ``max_docs`` (``None`` = no
+    limit), then ``filter_self`` drops ``docid == qid`` rows (required for
+    Rev2Rev to match the paper; see
+    :func:`recare_baselines.eval.filter_self_match`).
     """
     if missing not in MISSING_POLICIES:
         raise ValueError(f"missing must be one of {MISSING_POLICIES}, got {missing!r}")
+    if max_docs is not None and max_docs < 1:
+        raise ValueError(f"max_docs must be positive or None, got {max_docs!r}")
 
-    run = to_scored_run(ranked)
+    lists, n_dup, n_trunc = prepare_lists(ranked, max_docs)
+    run = to_scored_run(lists)
     n_self = 0
     if filter_self:
         before = sum(len(v) for v in run.values())
@@ -228,7 +268,8 @@ def evaluate_ranked(
         n_run_queries=len(ranked),
         missing_qids=missing_qids,
         extra_qids=extra_qids,
-        n_duplicate_docs_dropped=0,
+        n_duplicate_docs_dropped=n_dup,
+        n_truncated_queries=n_trunc,
         n_self_matches_dropped=n_self,
     )
 
@@ -239,9 +280,12 @@ def evaluate_ranked_files(
     *,
     filter_self: bool = False,
     missing: str = "zero",
+    max_docs: int | None = DEFAULT_MAX_DOCS,
 ) -> RankedEvalResult:
-    ranked, n_dup = read_ranked(run_path)
-    qrels = read_qrels(qrels_path)
-    result = evaluate_ranked(ranked, qrels, filter_self=filter_self, missing=missing)
-    result.n_duplicate_docs_dropped = n_dup
-    return result
+    return evaluate_ranked(
+        read_ranked(run_path),
+        read_qrels(qrels_path),
+        filter_self=filter_self,
+        missing=missing,
+        max_docs=max_docs,
+    )

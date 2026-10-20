@@ -34,7 +34,8 @@ ReCaRe/
 ├── docs/                   # Dataset construction + reproduction guides
 ├── tests/                  # pytest unit + smoke tests
 ├── results/                # Per-cell metrics + result-summary markdown
-└── data/expansion/         # LLM query expansions (test split, ~7 MB)
+├── data/expansion/         # LLM query expansions (test split, ~7 MB)
+└── data/sample_runs/       # BM25 sample runs in the track submission format
 ```
 
 | Document | What it covers |

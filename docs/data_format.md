@@ -65,8 +65,11 @@ uv run recare-baselines evaluate-ranked run.jsonl \
 - Queries in the qrels but missing from the run score 0 (`--missing zero`,
   default; `trec_eval -c`). `--missing skip` averages over the run's queries
   only. Run queries absent from the qrels are ignored.
-- List order is the evaluated order. A document repeated within a list is kept
-  at its first position only.
+- List order is the evaluated order. Each list is de-duplicated (first
+  occurrence wins), then truncated to `--max-docs` documents (default 1,000,
+  the track limit), and then the self-match filter is applied.
+- `.jsonl.gz` input is read transparently. BM25 sample runs for the English
+  subtasks are in `data/sample_runs/` (see [`EVALUATION.md`](../EVALUATION.md)).
 - **Ties:** `trec_eval` orders documents with equal scores by docid
   (descending), not by input order. When converting a *scored* run with ties
   into this format, sort by `(score, docid)` descending to reproduce the
