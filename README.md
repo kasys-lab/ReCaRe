@@ -74,8 +74,8 @@ and score it against a qrels file with the paper's metric code:
 uv run recare-baselines evaluate-ranked run.jsonl qrels-rev2rev-en/test.jsonl --task rev2rev
 ```
 
-See [`docs/data_format.md`](docs/data_format.md#ranked-list-jsonl-external-runs)
-for options (self-match filter, missing queries, ties).
+See [`EVALUATION.md`](EVALUATION.md) for a step-by-step guide (also the
+official scoring procedure of the CAIL 2026 ReCaRe track).
 
 ## Reproduction
 
