@@ -22,15 +22,25 @@ uv sync
 uv run huggingface-cli download kasys/ReCaRe --repo-type dataset \
     --include "qrels-*/test.jsonl" --local-dir recare_data
 
-# 3. Score a run
+# 3a. Score a Rat2Rev run
 uv run recare-baselines evaluate-ranked \
     tsukuba_rat2rev-en_run1.jsonl \
     recare_data/qrels-rat2rev-en/test.jsonl \
     --task rat2rev
+
+# 3b. Score a Rev2Rev run
+uv run recare-baselines evaluate-ranked \
+    tsukuba_rev2rev-en_run1.jsonl \
+    recare_data/qrels-rev2rev-en/test.jsonl \
+    --task rev2rev
 ```
 
 The command prints a JSON summary. The number that determines the official
 ranking is `metrics.ndcg_10`.
+
+Always pass the `--task` that matches the run. For Rev2Rev, `--task rev2rev`
+removes the query's own article from its list before scoring, as the official
+evaluation does (see [Section 3](#3-score-each-subtask)).
 
 To try the script before you have a run of your own, score one of the
 [sample runs](#sample-runs) instead:
@@ -41,6 +51,12 @@ uv run recare-baselines evaluate-ranked \
     recare_data/qrels-rat2rev-en/test.jsonl \
     --task rat2rev
 # -> "ndcg_10": 0.1163..., "recall_100": 0.2255...
+
+uv run recare-baselines evaluate-ranked \
+    data/sample_runs/bm25_rev2rev-en_run1.jsonl.gz \
+    recare_data/qrels-rev2rev-en/test.jsonl \
+    --task rev2rev
+# -> "ndcg_10": 0.2013..., "recall_100": 0.3106...
 ```
 
 > `uv sync` installs the full baseline stack (Pyserini, PyTorch, and so on),
